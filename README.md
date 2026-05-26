@@ -218,7 +218,7 @@ Defenders often reject large uploads. That helps, but it does not solve the prob
 If scene detection is part of the pipeline, rapid scene changes can increase the number of scenes, the number of extracted representative frames, and the total amount of text or metadata generated downstream.
 
 ```mermaid
-flowchart LR
+flowchart TB
     V[Video with rapid cuts] --> SD[Scene detector]
     SD --> SC[Many scene boundaries]
     SC --> X[More extracted frames]
@@ -268,7 +268,7 @@ Transport channels usually include error correction, so systems often assume wel
 A real engagement tied these tools together into an automated testing loop.
 
 ```mermaid
-flowchart LR
+flowchart TB
     PI[Collect prompt injection payloads] --> G[Generate videos]
     RE[Generate resource exhaustion cases] --> G
     G --> U[Upload to target API]
