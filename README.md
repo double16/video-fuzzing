@@ -4,6 +4,8 @@
 
 Tools for creating media files to attack video processing software using AI.
 
+There is a blog post that goes along with these tools: [Attacking AI Video Processing](https://double16.github.io/l/2026/05/26/attacking-ai-video-processing.html)
+
 **Note**: This code was written with assistance from an LLM. A live engineer with real development skills is responsible for the code.
 
 <div style="clear:left;"></div>
