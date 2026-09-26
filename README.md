@@ -420,6 +420,24 @@ optional arguments:
   --margin MARGIN       Margin in pixels (default: 10)
 ```
 
+### text-to-audio.py
+
+Generate audio from text.
+
+```commandline
+usage: text-to-audio.py [-h] [--output OUTPUT]
+                        ...
+
+Generate audio from text.
+
+positional arguments:
+  text                  Text to display and/or speak
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --output OUTPUT       Output filename (default: output.mp4)
+```
+
 ### mp4_datetime_fuzzer.py
 
 Videos have timestamps in the frames. Let's fuzz those to see if something breaks :)
