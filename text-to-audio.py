@@ -59,6 +59,8 @@ def main():
             with open(text_arg, "r") as f:
                 tts_text += f.read()
         else:
+            if tts_text:
+                tts_text += " "
             tts_text += text_arg
 
     if not tts_text:

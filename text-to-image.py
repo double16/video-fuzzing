@@ -85,7 +85,15 @@ def main():
     args = parser.parse_args()
 
     if args.text:
-        display_text = " ".join(args.text)
+        display_text = ""
+        for text_arg in args.text:
+            if os.path.exists(text_arg):
+                with open(text_arg, "r") as f:
+                    display_text += f.read()
+            else:
+                if display_text:
+                    display_text += " "
+                display_text += text_arg
     else:
         display_text = sys.stdin.read().strip()
         if not display_text:
