@@ -42,15 +42,27 @@ class TextToVideoSyncTests(unittest.TestCase):
             cues,
         )
 
-    def test_unmatched_subtitles_repeat_full_text_in_equal_time_cues(self):
+    def test_matching_subtitles_split_into_two_line_cues_weighted_by_text(self):
+        pages = [["a", "bb", "ccc", "dddd"]]
+        cues = text_to_video.build_subtitle_cues("same", "same", pages, [10.0])
+
+        self.assertEqual(["a\nbb", "ccc\ndddd"], [cue[2] for cue in cues])
+        self.assertAlmostEqual(cues[0][0], 0.0)
+        self.assertAlmostEqual(cues[0][1], 3.0)
+        self.assertAlmostEqual(cues[1][0], 3.0)
+        self.assertAlmostEqual(cues[1][1], 10.0)
+
+    def test_unmatched_subtitles_chunk_two_lines_across_total_duration(self):
         cues = text_to_video.build_subtitle_cues(
-            "alternate subtitle", "display copy", self.pages, [5.0, 5.0]
+            "line one\nline two\nline three", "display copy", self.pages, [5.0, 5.0]
         )
 
         self.assertEqual(
-            [(0.0, 5.0, "alternate subtitle"), (5.0, 10.0, "alternate subtitle")],
-            cues,
+            ["line one\nline two", "line three"],
+            [cue[2] for cue in cues],
         )
+        self.assertAlmostEqual(cues[0][0], 0.0)
+        self.assertAlmostEqual(cues[-1][1], 10.0)
 
     def test_matching_tts_scene_duration_uses_audio_when_longer(self):
         with patch.object(text_to_video, "audio_duration_seconds", side_effect=[1.0, 4.5]):
@@ -85,6 +97,12 @@ class TextToVideoSyncTests(unittest.TestCase):
         self.assertEqual(
             [(0.0, 3.5, "first page\nline two"), (3.5, 11.75, "second page")],
             cues,
+        )
+
+    def test_drawtext_file_replaces_empty_lines_so_ffmpeg_keeps_top_origin(self):
+        self.assertEqual(
+            " \n**Robert:** Yes.\n \nlast line",
+            text_to_video.drawtext_file_text(["", "**Robert:** Yes.", "", "last line"]),
         )
 
     def test_srt_timestamp_handles_minutes_and_milliseconds(self):

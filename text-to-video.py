@@ -51,6 +51,12 @@ def page_display_lines(page):
     return list(page)
 
 
+def drawtext_file_text(page_lines):
+    # FFmpeg drawtext treats a leading empty line as a bottom-aligned origin,
+    # which clips all but the last lines off the top of the frame.
+    return "\n".join(line if line else " " for line in page_lines)
+
+
 def build_tts_chunks(tts_text, display_text, pages):
     if tts_text == display_text:
         return [
@@ -124,19 +130,50 @@ def scene_durations_for_tts(min_scene_duration, scene_count, tts_matches_display
     return [min_scene_duration] * scene_count
 
 
-def build_subtitle_cues(subtitle_text, display_text, pages, scene_durations):
-    if subtitle_text == display_text:
-        page_texts = ["\n".join(page_display_lines(page)) for page in pages]
-    else:
-        page_texts = [subtitle_text] * len(pages)
+MAX_SUBTITLE_LINES = 2
 
+
+def chunk_lines(lines, max_lines=MAX_SUBTITLE_LINES):
+    lines = list(lines) or [""]
+    return [lines[index:index + max_lines] for index in range(0, len(lines), max_lines)]
+
+
+def _cue_weight(text):
+    return max(1, len(text.replace("\n", "")))
+
+
+def _cues_for_chunks(chunks, start, duration):
+    weights = [_cue_weight("\n".join(chunk)) for chunk in chunks]
+    total_weight = sum(weights)
+    cues = []
+    offset = start
+    remaining = duration
+    for index, (chunk, weight) in enumerate(zip(chunks, weights)):
+        if index == len(chunks) - 1:
+            chunk_duration = remaining
+        else:
+            chunk_duration = duration * (weight / total_weight)
+            remaining -= chunk_duration
+        end = offset + chunk_duration
+        cues.append((offset, end, "\n".join(chunk)))
+        offset = end
+    return cues
+
+
+def build_subtitle_cues(subtitle_text, display_text, pages, scene_durations):
     cues = []
     start = 0.0
-    for page_text, scene_duration in zip(page_texts, scene_durations):
-        end = start + scene_duration
-        cues.append((start, end, page_text))
-        start = end
-    return cues
+    if subtitle_text == display_text:
+        for page, scene_duration in zip(pages, scene_durations):
+            chunks = chunk_lines(page_display_lines(page))
+            cues.extend(_cues_for_chunks(chunks, start, scene_duration))
+            start += scene_duration
+        return cues
+
+    unmatched_lines = subtitle_text.splitlines() or [subtitle_text]
+    chunks = chunk_lines(unmatched_lines)
+    total_duration = sum(scene_durations)
+    return _cues_for_chunks(chunks, 0.0, total_duration)
 
 
 def generate_srt(cues):
@@ -235,7 +272,7 @@ def main():
 
                 drawtext_path = os.path.join(temp_dir, f"scene_{scene_index + 1:03}.txt")
                 with open(drawtext_path, "w", encoding="utf-8") as drawtext_file:
-                    drawtext_file.write("\n".join(page_lines))
+                    drawtext_file.write(drawtext_file_text(page_lines))
                 escaped_drawtext_path = (
                     drawtext_path.replace("\\", r"\\").replace(":", r"\:").replace("'", r"\'")
                 )
