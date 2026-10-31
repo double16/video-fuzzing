@@ -3,8 +3,8 @@
 import os
 import sys
 import argparse
-import textwrap
 from PIL import Image, ImageDraw, ImageFont
+from text_layout import canvas_size, line_height, paginate_lines, wrap_lines
 
 def get_font(fontfile, fontsize):
     if fontfile:
@@ -26,19 +26,9 @@ def get_font(fontfile, fontsize):
     return None
 
 def generate_images(text, fontsize, fontcolor, background, maxwidth, maxheight, margin, output_dir, fontfile=None, listfile=None):
-    char_width_factor = 0.6
-    line_height_factor = 1.5
-    char_pixel_width = fontsize * char_width_factor
-    line_height = int(fontsize * line_height_factor)
-
-    max_chars_per_line = int((maxwidth - 2 * margin) // char_pixel_width)
-    max_lines_per_image = int((maxheight - 2 * margin) // line_height)
-
-    wrapped_text = textwrap.fill(text, width=max_chars_per_line)
-    all_lines = wrapped_text.split("\n")
-
-    width = max(640, maxwidth + maxwidth % 2)
-    height = max(480, maxheight + maxheight % 2)
+    image_line_height = line_height(fontsize)
+    pages = paginate_lines(wrap_lines(text, fontsize, maxwidth, margin), fontsize, maxheight, margin)
+    width, height = canvas_size(maxwidth, maxheight)
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -50,15 +40,15 @@ def generate_images(text, fontsize, fontcolor, background, maxwidth, maxheight, 
 
     output_paths = []
 
-    for i in range(0, len(all_lines), max_lines_per_image):
+    for page_index, page_lines in enumerate(pages):
         img = Image.new("RGB", (width, height), background)
         draw = ImageDraw.Draw(img)
 
-        for j, line in enumerate(all_lines[i:i + max_lines_per_image]):
-            y = margin + j * line_height
+        for j, line in enumerate(page_lines):
+            y = margin + j * image_line_height
             draw.text((margin, y), line, font=font, font_size=fontsize, fill=fontcolor)
 
-        output_path = os.path.abspath(os.path.join(output_dir, f"frame_{i // max_lines_per_image + 1:03}.png"))
+        output_path = os.path.abspath(os.path.join(output_dir, f"frame_{page_index + 1:03}.png"))
         img.save(output_path)
         output_paths.append(output_path)
 
