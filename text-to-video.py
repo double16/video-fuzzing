@@ -127,7 +127,12 @@ def scene_durations_for_tts(min_scene_duration, scene_count, tts_matches_display
             max(min_scene_duration, audio_duration_seconds(audio_path))
             for audio_path in audio_paths
         ]
-    return [min_scene_duration] * scene_count
+    durations = [min_scene_duration] * scene_count
+    if audio_paths:
+        extra = audio_duration_seconds(audio_paths[0]) - sum(durations)
+        if extra > 0:
+            durations[-1] += extra
+    return durations
 
 
 MAX_SUBTITLE_LINES = 2
@@ -193,7 +198,28 @@ def concat_quote(path):
     return "'" + os.path.abspath(path).replace("'", "'\\''") + "'"
 
 
-def main():
+def load_text_argument(value):
+    if value and os.path.isfile(value):
+        with open(value, encoding="utf-8") as text_file:
+            return text_file.read()
+    return value
+
+
+def load_display_text(text_args):
+    if len(text_args) == 1 and os.path.isfile(text_args[0]):
+        return load_text_argument(text_args[0])
+    display_text = ""
+    for text_arg in text_args:
+        if os.path.isfile(text_arg):
+            display_text += load_text_argument(text_arg)
+        else:
+            if display_text:
+                display_text += " "
+            display_text += text_arg
+    return display_text
+
+
+def build_arg_parser():
     parser = argparse.ArgumentParser(
         description="Generate a video with text, optional Text-to-Speech, and optional embedded subtitles."
     )
@@ -210,7 +236,16 @@ def main():
     parser.add_argument("--tts-text", help="Alternate text to use for TTS (default: same as visible text)")
     parser.add_argument("--subtitle-text", help="Alternate text to use for subtitles (default: same as TTS text, which defaults to visible text)")
     parser.add_argument("--subtitle-language", default="eng", help="Subtitle language ISO 639-2 code (default: eng)")
-    parser.add_argument("text", nargs=argparse.REMAINDER, help="Text or a UTF-8 text file path to display and/or speak")
+    parser.add_argument("text", nargs="*", help="Text or a UTF-8 text file path to display and/or speak")
+    return parser
+
+
+def parse_args(argv=None):
+    return build_arg_parser().parse_args(argv)
+
+
+def main():
+    parser = build_arg_parser()
     args = parser.parse_args()
 
     if not args.text:
@@ -224,13 +259,9 @@ def main():
     if os.path.exists(ffmpeg_full):
         ffmpeg = ffmpeg_full
 
-    if len(args.text) == 1 and os.path.isfile(args.text[0]):
-        with open(args.text[0], encoding="utf-8") as text_file:
-            display_text = text_file.read()
-    else:
-        display_text = " ".join(args.text)
-    tts_text = args.tts_text if args.tts_text else display_text
-    subtitle_text = args.subtitle_text if args.subtitle_text else tts_text
+    display_text = load_display_text(args.text)
+    tts_text = load_text_argument(args.tts_text) if args.tts_text else display_text
+    subtitle_text = load_text_argument(args.subtitle_text) if args.subtitle_text else tts_text
 
     pages = paginate_lines(
         wrap_units(display_text, args.fontsize, args.maxwidth, args.margin),
@@ -323,19 +354,14 @@ def main():
                             "aformat=sample_fmts=fltp:channel_layouts=stereo,apad,"
                             f"atrim=duration={scene_duration:.6f},asetpts=PTS-STARTPTS[a{scene_index}]"
                         )
+                    audio_inputs = "".join(f"[a{index}]" for index in range(len(pages)))
+                    audio_filters.append(f"{audio_inputs}concat=n={len(pages)}:v=0:a=1[a]")
                 else:
-                    audio_input_index = 1
-                    start = 0.0
-                    for scene_index, scene_duration in enumerate(scene_durations):
-                        audio_filters.append(
-                            f"[{audio_input_index}:a:0]atrim=start={start:.6f}:"
-                            f"duration={scene_duration:.6f},asetpts=PTS-STARTPTS,aresample=44100,"
-                            "aformat=sample_fmts=fltp:channel_layouts=stereo,apad,"
-                            f"atrim=duration={scene_duration:.6f},asetpts=PTS-STARTPTS[a{scene_index}]"
-                        )
-                        start += scene_duration
-                audio_inputs = "".join(f"[a{index}]" for index in range(len(pages)))
-                audio_filters.append(f"{audio_inputs}concat=n={len(pages)}:v=0:a=1[a]")
+                    audio_filters.append(
+                        "[1:a:0]aresample=44100,"
+                        "aformat=sample_fmts=fltp:channel_layouts=stereo,apad,"
+                        f"atrim=duration={total_duration:.6f},asetpts=PTS-STARTPTS[a]"
+                    )
                 audio_input_count = len(tts_audio_paths)
             else:
                 mux_command.extend([

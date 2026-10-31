@@ -1,4 +1,5 @@
 import importlib.util
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -107,6 +108,40 @@ class TextToVideoSyncTests(unittest.TestCase):
 
     def test_srt_timestamp_handles_minutes_and_milliseconds(self):
         self.assertEqual("00:01:02,345", text_to_video.format_srt_timestamp(62.345))
+
+    def test_tts_text_argument_loads_file_contents(self):
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".txt", delete=False) as handle:
+            handle.write("spoken from file")
+            path = handle.name
+        self.assertEqual("spoken from file", text_to_video.load_text_argument(path))
+        self.assertEqual("literal speech", text_to_video.load_text_argument("literal speech"))
+
+    def test_display_text_loads_file_even_with_other_args(self):
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".txt", delete=False) as handle:
+            handle.write("on screen")
+            path = handle.name
+        self.assertEqual("on screen", text_to_video.load_display_text([path]))
+        self.assertEqual("hello world", text_to_video.load_display_text(["hello", "world"]))
+
+    def test_tts_text_after_display_file_is_not_swallowed(self):
+        result = text_to_video.parse_args(
+            ["--tts", "janedoe.txt", "--tts-text", "This is alternate audio text."]
+        )
+        self.assertTrue(result.tts)
+        self.assertEqual(["janedoe.txt"], result.text)
+        self.assertEqual("This is alternate audio text.", result.tts_text)
+
+    def test_unmatched_tts_keeps_min_scene_time_and_extends_last_if_audio_longer(self):
+        with patch.object(text_to_video, "audio_duration_seconds", return_value=1.5):
+            self.assertEqual(
+                [1.0, 1.0],
+                text_to_video.scene_durations_for_tts(1.0, 2, False, ["alt.m4a"]),
+            )
+        with patch.object(text_to_video, "audio_duration_seconds", return_value=5.0):
+            self.assertEqual(
+                [1.0, 4.0],
+                text_to_video.scene_durations_for_tts(1.0, 2, False, ["alt.m4a"]),
+            )
 
 
 if __name__ == "__main__":
